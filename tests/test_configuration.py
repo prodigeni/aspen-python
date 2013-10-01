@@ -11,7 +11,7 @@ from pytest import raises
 import aspen
 from aspen.configuration import Configurable, ConfigurationError, parse
 from aspen.configuration.options import OptionParser, DEFAULT
-from aspen.testing import teardown_function
+from aspen.testing import teardown as clean_slate
 from aspen.testing import StubRequest
 from aspen.website import Website
 
@@ -93,6 +93,7 @@ def test_www_root_defaults_to_cwd(tmpdir):
     assert actual == expected
 
 def test_ConfigurationError_raised_if_no_cwd(tmpdir):
+    clean_slate()
     cwd = tmpdir.ensure("doesnotexist", dir=True)
     cwd.chdir()
     cwd.remove(rec=1, ignore_errors=1)
@@ -101,6 +102,7 @@ def test_ConfigurationError_raised_if_no_cwd(tmpdir):
     raises(ConfigurationError, c.configure, [])
 
 def test_ConfigurationError_NOT_raised_if_no_cwd_but_do_have__www_root(tmpdir):
+    clean_slate()
     cwd = tmpdir.ensure("doesnotexist", dir=True)
     assert cwd.check()
     cwd.chdir()

@@ -3,11 +3,13 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import os.path
 from Cookie import SimpleCookie
 from StringIO import StringIO
 
 from aspen.http.request import Request
 from aspen.testing import StubWSGIRequest
+from aspen.website import Website
 
 BOUNDARY = 'BoUnDaRyStRiNg'
 MULTIPART_CONTENT = 'multipart/form-data; boundary=%s' % BOUNDARY
@@ -146,3 +148,14 @@ class TestClient(object):
     def get(self, path, cookie_info=None, **extra):
         request = self.get_request(path, "GET")
         return self.perform_request(request, cookie_info)
+
+
+def basic(www_root, website_args=[]):
+    """return a client of a basic website config using the specified www_root, 
+       for testing.
+    """
+    website = Website([ '--www_root', www_root
+                      , '--project_root', os.path.join(www_root, '.aspen')
+                      ] + list(website_args))
+    return TestClient(website)
+

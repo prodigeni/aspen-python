@@ -4,12 +4,13 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from aspen import execution
-from aspen.testing.fsfix import teardown_function
+from aspen.testing.fsfix import teardown as clean_slate
 
 class Foo:
     pass
 
 def test_startup_basically_works():
+    clean_slate()
     website = Foo()
     website.changes_kill = True
     website.root = 'foo'

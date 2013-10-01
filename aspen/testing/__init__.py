@@ -46,16 +46,22 @@ class StubRequest:
         return Request.from_wsgi(StubWSGIRequest(uripath))
 
     @classmethod
-    def from_fs(cls, fs, *a):
+    def from_fs(cls, fs, *a, **kwargs):
         """Takes a path under FSFIX using / as the path separator.
         """
         fs = os.sep.join(fs.split(os.sep))
-        uri_path = fs
-        if fs.endswith('.spt'):
-            uri_path = fs[:-4]
+        uri = kwargs.get('uri')
+        if uri is None:
+            uri_path = fs
+            if fs.endswith('.spt'):
+                uri_path = fs[:-4]
+        else:
+            uri_path = str(uri)
+        basedir = kwargs.get('basedir')
+        www_root = basedir or FSFIX
         request = Request.from_wsgi(StubWSGIRequest(uri_path))
-        website = Website([ '--www_root', FSFIX
-                          , '--project_root', os.path.join(FSFIX, '.aspen')
+        website = Website([ '--www_root', str(www_root)
+                          , '--project_root', os.path.join(str(FSFIX), '.aspen')
                            ] + list(a))
         request.www_root = os.path.join(os.path.dirname(__file__), FSFIX)
         request.fs = fs
@@ -63,6 +69,9 @@ class StubRequest:
         request.website = website
         request._media_type = None
         return request
+
+   
+
 
 StubRequest = StubRequest()
 

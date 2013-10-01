@@ -8,11 +8,19 @@ from pytest import raises
 from aspen import resources, Response
 from aspen.resources.pagination import Page
 from aspen.resources.negotiated_resource import NegotiatedResource
-from aspen.testing import teardown_function, handle, mk, StubRequest
+from aspen.testing.client import basic
+from aspen.testing import teardown_function, StubRequest
 from aspen.website import Website
 from aspen.renderers.stdlib_template import Factory as TemplateFactory
 from aspen.renderers.stdlib_percent import Factory as PercentFactory
 
+from conftest import pymk
+
+def handle(www_root, uri):
+    """Given a www_root, return a response for uri"""
+    tc = basic(str(www_root))
+    result = tc.get(str(uri))
+    return result
 
 def get(**_kw):
     kw = dict( website = Website([])
@@ -124,51 +132,51 @@ Greetings, program!
 <h1>Greetings, program!</h1>
 """
 
-def test_get_response_gets_response():
-    mk(('index.spt', NEGOTIATED_RESOURCE))
+def test_get_response_gets_response(tmpdir):
+    pymk(tmpdir, ('index.spt', NEGOTIATED_RESOURCE))
     response = Response()
-    request = StubRequest.from_fs('index.spt')
+    request = StubRequest.from_fs('index.spt', uri='/', basedir=tmpdir)
     actual = get_response(request, response)
     assert actual is response
 
-def test_get_response_is_happy_not_to_negotiate():
-    mk(('index.spt', NEGOTIATED_RESOURCE))
-    request = StubRequest.from_fs('index.spt')
+def test_get_response_is_happy_not_to_negotiate(tmpdir):
+    pymk(tmpdir, ('index.spt', NEGOTIATED_RESOURCE))
+    request = StubRequest.from_fs('index.spt', uri='/', basedir=tmpdir)
     actual = get_response(request, Response()).body
     assert actual == "Greetings, program!\n"
 
-def test_get_response_sets_content_type_when_it_doesnt_negotiate():
-    mk(('index.spt', NEGOTIATED_RESOURCE))
-    request = StubRequest.from_fs('index.spt')
+def test_get_response_sets_content_type_when_it_doesnt_negotiate(tmpdir):
+    pymk(tmpdir, ('index.spt', NEGOTIATED_RESOURCE))
+    request = StubRequest.from_fs('index.spt', uri='/', basedir=tmpdir)
     actual = get_response(request, Response()).headers['Content-Type']
     assert actual == "text/plain; charset=UTF-8"
 
-def test_get_response_doesnt_reset_content_type_when_not_negotiating():
-    mk(('index.spt', NEGOTIATED_RESOURCE))
-    request = StubRequest.from_fs('index.spt')
+def test_get_response_doesnt_reset_content_type_when_not_negotiating(tmpdir):
+    pymk(tmpdir, ('index.spt', NEGOTIATED_RESOURCE))
+    request = StubRequest.from_fs('index.spt', uri='/', basedir=tmpdir)
     response = Response()
     response.headers['Content-Type'] = 'never/mind'
     actual = get_response(request, response).headers['Content-Type']
     assert actual == "never/mind"
 
 
-def test_get_response_negotiates():
-    mk(('index.spt', NEGOTIATED_RESOURCE))
-    request = StubRequest.from_fs('index.spt')
+def test_get_response_negotiates(tmpdir):
+    pymk(tmpdir, ('index.spt', NEGOTIATED_RESOURCE))
+    request = StubRequest.from_fs('index.spt', uri='/', basedir=tmpdir)
     request.headers['Accept'] = 'text/html'
     actual = get_response(request, Response()).body
     assert actual == "<h1>Greetings, program!</h1>\n"
 
-def test_get_response_sets_content_type_when_it_negotiates():
-    mk(('index.spt', NEGOTIATED_RESOURCE))
-    request = StubRequest.from_fs('index.spt')
+def test_get_response_sets_content_type_when_it_negotiates(tmpdir):
+    pymk(tmpdir, ('index.spt', NEGOTIATED_RESOURCE))
+    request = StubRequest.from_fs('index.spt', uri='/', basedir=tmpdir)
     request.headers['Accept'] = 'text/html'
     actual = get_response(request, Response()).headers['Content-Type']
     assert actual == "text/html; charset=UTF-8"
 
-def test_get_response_doesnt_reset_content_type_when_negotiating():
-    mk(('index.spt', NEGOTIATED_RESOURCE))
-    request = StubRequest.from_fs('index.spt')
+def test_get_response_doesnt_reset_content_type_when_negotiating(tmpdir):
+    pymk(tmpdir, ('index.spt', NEGOTIATED_RESOURCE))
+    request = StubRequest.from_fs('index.spt', uri='/', basedir=tmpdir)
     request.headers['Accept'] = 'text/html'
     response = Response()
     response.headers['Content-Type'] = 'never/mind'
@@ -178,16 +186,16 @@ def test_get_response_doesnt_reset_content_type_when_negotiating():
     actual = get_response(request, response).headers['Content-Type']
     assert actual == "never/mind"
 
-def test_get_response_raises_406_if_need_be():
-    mk(('index.spt', NEGOTIATED_RESOURCE))
-    request = StubRequest.from_fs('index.spt')
+def test_get_response_raises_406_if_need_be(tmpdir):
+    pymk(tmpdir, ('index.spt', NEGOTIATED_RESOURCE))
+    request = StubRequest.from_fs('index.spt', uri='/', basedir=tmpdir)
     request.headers['Accept'] = 'cheese/head'
     actual = raises(Response, get_response, request, Response()).value.code
     assert actual == 406
 
-def test_get_response_406_gives_list_of_acceptable_types():
-    mk(('index.spt', NEGOTIATED_RESOURCE))
-    request = StubRequest.from_fs('index.spt')
+def test_get_response_406_gives_list_of_acceptable_types(tmpdir):
+    pymk(tmpdir, ('index.spt', NEGOTIATED_RESOURCE))
+    request = StubRequest.from_fs('index.spt', uri='/', basedir=tmpdir)
     request.headers['Accept'] = 'cheese/head'
     actual = raises(Response, get_response, request, Response()).value.body
     expected = "The following media types are available: text/plain, text/html."
@@ -210,20 +218,17 @@ website.default_renderers_by_media_type['text/plain'] = 'glubber'
 """
 
 
-def test_can_override_default_renderers_by_mimetype():
-    mk(('.aspen/configure-aspen.py', OVERRIDE_SIMPLATE),
+def test_can_override_default_renderers_by_mimetype(tmpdir):
+    pymk(tmpdir, ('.aspen/configure-aspen.py', OVERRIDE_SIMPLATE),
        ('index.spt', NEGOTIATED_RESOURCE))
-    request = StubRequest.from_fs('index.spt')
-    request.headers['Accept'] = 'text/plain'
-    actual = get_response(request, Response()).body
+    #request.headers['Accept'] = 'text/plain'
+    actual = handle(tmpdir, '/').body
     assert actual == "glubber"
 
-def test_can_override_default_renderer_entirely():
-    mk(('.aspen/configure-aspen.py', OVERRIDE_SIMPLATE),
+def test_can_override_default_renderer_entirely(tmpdir):
+    pymk(tmpdir, ('.aspen/configure-aspen.py', OVERRIDE_SIMPLATE),
        ('index.spt', NEGOTIATED_RESOURCE))
-    request = StubRequest.from_fs('index.spt')
-    request.headers['Accept'] = 'text/plain'
-    actual = get_response(request, Response()).body
+    actual = handle(tmpdir, '/').body
     assert actual == "glubber"
 
 
@@ -237,23 +242,23 @@ foo = "program"
 [-------] text/plain
 Greetings, %(foo)s!"""
 
-def test_indirect_negotiation_sets_media_type():
-    mk(('/foo.spt', INDIRECTLY_NEGOTIATED_RESOURCE))
-    response = handle('/foo.html')
+def test_indirect_negotiation_sets_media_type(tmpdir):
+    pymk(tmpdir, ('/foo.spt', INDIRECTLY_NEGOTIATED_RESOURCE))
+    response = handle(tmpdir, '/foo.html')
     expected = "<h1>Greetings, program!</h1>\n"
     actual = response.body
     assert actual == expected
 
-def test_indirect_negotiation_sets_media_type_to_secondary():
-    mk(('/foo.spt', INDIRECTLY_NEGOTIATED_RESOURCE))
-    response = handle('/foo.txt')
+def test_indirect_negotiation_sets_media_type_to_secondary(tmpdir):
+    pymk(tmpdir, ('/foo.spt', INDIRECTLY_NEGOTIATED_RESOURCE))
+    response = handle(tmpdir, '/foo.txt')
     expected = "Greetings, program!"
     actual = response.body
     assert actual == expected
 
-def test_indirect_negotiation_with_unsupported_media_type_is_404():
-    mk(('/foo.spt', INDIRECTLY_NEGOTIATED_RESOURCE))
-    response = handle('/foo.jpg')
+def test_indirect_negotiation_with_unsupported_media_type_is_404(tmpdir):
+    pymk(tmpdir, ('/foo.spt', INDIRECTLY_NEGOTIATED_RESOURCE))
+    response = handle(tmpdir, '/foo.jpg')
     actual = response.code
     assert actual == 404
 
@@ -267,9 +272,9 @@ foo = path['foo']
 Greetings, %(foo)s!"""
 
 
-def test_negotiated_inside_virtual_path():
-    mk(('/%foo/bar.spt', INDIRECTLY_NEGOTIATED_VIRTUAL_RESOURCE ))
-    response = handle('/program/bar.txt')
+def test_negotiated_inside_virtual_path(tmpdir):
+    pymk(tmpdir, ('/%foo/bar.spt', INDIRECTLY_NEGOTIATED_VIRTUAL_RESOURCE ))
+    response = handle(tmpdir, '/program/bar.txt')
     expected = "Greetings, program!"
     actual = response.body
     assert actual == expected
@@ -284,22 +289,22 @@ Unknown request type, %(foo)s!
 [-------] text/*
 Greetings, %(foo)s!"""
 
-def test_negotiated_inside_virtual_path_with_startypes_present():
-    mk(('/%foo/bar.spt', INDIRECTLY_NEGOTIATED_VIRTUAL_RESOURCE_STARTYPE ))
-    response = handle('/program/bar.html')
+def test_negotiated_inside_virtual_path_with_startypes_present(tmpdir):
+    pymk(tmpdir, ('/%foo/bar.spt', INDIRECTLY_NEGOTIATED_VIRTUAL_RESOURCE_STARTYPE ))
+    response = handle(tmpdir, '/program/bar.html')
     actual = response.body
     assert '<h1>' in actual
 
-def test_negotiated_inside_virtual_path_with_startype_partial_match():
-    mk(('/%foo/bar.spt', INDIRECTLY_NEGOTIATED_VIRTUAL_RESOURCE_STARTYPE ))
-    response = handle('/program/bar.txt')
+def test_negotiated_inside_virtual_path_with_startype_partial_match(tmpdir):
+    pymk(tmpdir, ('/%foo/bar.spt', INDIRECTLY_NEGOTIATED_VIRTUAL_RESOURCE_STARTYPE ))
+    response = handle(tmpdir, '/program/bar.txt')
     expected = "Greetings, program!"
     actual = response.body
     assert actual == expected
 
-def test_negotiated_inside_virtual_path_with_startype_fallback():
-    mk(('/%foo/bar.spt', INDIRECTLY_NEGOTIATED_VIRTUAL_RESOURCE_STARTYPE ))
-    response = handle('/program/bar.jpg')
+def test_negotiated_inside_virtual_path_with_startype_fallback(tmpdir):
+    pymk(tmpdir, ('/%foo/bar.spt', INDIRECTLY_NEGOTIATED_VIRTUAL_RESOURCE_STARTYPE ))
+    response = handle(tmpdir, '/program/bar.jpg')
     expected = "Unknown request type, program!"
     actual = response.body.strip()
     assert actual == expected
