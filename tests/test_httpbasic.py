@@ -3,9 +3,10 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+from pytest import raises
 
 from aspen.http.response import Response
-from aspen.testing import assert_raises, StubRequest
+from aspen.testing import StubRequest
 from aspen.auth.httpbasic import inbound_responder
 
 import base64
@@ -29,35 +30,35 @@ def test_good_works():
     request = _request_with(lambda u, p: u == "username" and p == "password", _auth_header("username", "password"))
     success = request.auth.authorized()
     assert success
-    assert request.auth.username() == "username", request.auth.username()
+    assert request.auth.username() == "username"
 
 def test_hard_passwords():
     for password in [ 'pass', 'username', ':password', ':password:','::::::' ]:
         request = _request_with(lambda u, p: u == "username" and p == password, _auth_header("username", password))
         success = request.auth.authorized()
         assert success
-        assert request.auth.username() == "username", request.auth.username()
+        assert request.auth.username() == "username"
 
 def test_no_auth():
     auth = lambda u, p: u == "username" and p == "password"
-    response = assert_raises(Response, _request_with, auth, None)
-    assert response.code == 401, response
+    response = raises(Response, _request_with, auth, None).value
+    assert response.code == 401
 
 def test_bad_fails():
     auth = lambda u, p: u == "username" and p == "password"
-    response = assert_raises(Response, _request_with, auth, _auth_header("username", "wrong password"))
-    assert response.code == 401, response
+    response = raises(Response, _request_with, auth, _auth_header("username", "wrong password")).value
+    assert response.code == 401
 
 def test_wrong_auth():
     auth = lambda u, p: u == "username" and p == "password"
-    response = assert_raises(Response, _request_with, auth, "Wacky xxx")
-    assert response.code == 400, response
+    response = raises(Response, _request_with, auth, "Wacky xxx").value
+    assert response.code == 400
 
 def test_malformed_password():
     auth = lambda u, p: u == "username" and p == "password"
-    response = assert_raises(Response, _request_with, auth, "Basic " + base64.b64encode("usernamepassword"))
-    assert response.code == 400, response
-    response = assert_raises(Response, _request_with, auth, "Basic xxx")
-    assert response.code == 400, response
+    response = raises(Response, _request_with, auth, "Basic " + base64.b64encode("usernamepassword")).value
+    assert response.code == 400
+    response = raises(Response, _request_with, auth, "Basic xxx").value
+    assert response.code == 400
 
 

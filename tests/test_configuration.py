@@ -6,12 +6,13 @@ from __future__ import unicode_literals
 import os
 import socket
 
+from pytest import raises
+
 import aspen
 from aspen.configuration import Configurable, ConfigurationError, parse
 from aspen.configuration.options import OptionParser, DEFAULT
-from aspen.testing import assert_raises, StubRequest, fix
-from aspen.testing.fsfix import teardown_function, FSFIX, mk
-#from aspen.testing import handle
+from aspen.testing import teardown_function
+from aspen.testing import StubRequest
 from aspen.website import Website
 
 
@@ -37,21 +38,21 @@ def test_everything_defaults_to_empty_string():
     expected = ( DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT
                , DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT
                 )
-    assert actual == expected, actual
+    assert actual == expected
 
 def test_logging_threshold_goes_to_one():
     o = OptionParser()
     opts, args = o.parse_args(['-l1'])
     actual = opts.logging_threshold
     expected = '1'
-    assert actual == expected, actual
+    assert actual == expected
 
 def test_logging_threshold_goes_to_eleven():
     o = OptionParser()
     opts, args = o.parse_args(['--logging_threshold=11'])
     actual = opts.logging_threshold
     expected = '11'
-    assert actual == expected, actual
+    assert actual == expected
 
 
 def test_configuration_scripts_can_take_one():
@@ -59,76 +60,78 @@ def test_configuration_scripts_can_take_one():
     opts, args = o.parse_args(['--configuration_scripts=startup.py'])
     actual = opts.configuration_scripts
     expected = 'startup.py'
-    assert actual == expected, actual
+    assert actual == expected
 
 def test_configuration_scripts_can_take_two_doesnt_do_anything_special():
     o = OptionParser()
     opts, args = o.parse_args(['--configuration_scripts=startup.py,uncle.py'])
     actual = opts.configuration_scripts
     expected = 'startup.py,uncle.py'
-    assert actual == expected, actual
+    assert actual == expected
 
 def test_configuration_scripts_really_doesnt_do_anything_special():
     o = OptionParser()
     opts, args = o.parse_args(['--configuration_scripts=Cheese is lovely.'])
     actual = opts.configuration_scripts
     expected = 'Cheese is lovely.'
-    assert actual == expected, actual
+    assert actual == expected
 
-def test_configuration_scripts_arent_confused_by_io_errors():
+
+def test_configuration_scripts_arent_confused_by_io_errors(tmpdir):
     CONFIG = "open('this file should not exist')\n"
-    mk(('configure-aspen.py', CONFIG))
+    cfgfile = tmpdir.ensure('configure-aspen.py')
+    cfgfile.write(CONFIG)
     c = Configurable()
-    actual = assert_raises(IOError, c.configure, ['-p', FSFIX])
-    assert actual.strerror == 'No such file or directory'
+    actual = raises(IOError, c.configure, ['-f', str(cfgfile)])
+    assert 'No such file or directory' in str(actual)
 
-def test_www_root_defaults_to_cwd():
-    mk()
+def test_www_root_defaults_to_cwd(tmpdir):
     c = Configurable()
     c.configure([])
     expected = os.path.realpath(os.getcwd())
     actual = c.www_root
-    assert actual == expected, actual
+    assert actual == expected
 
-def test_ConfigurationError_raised_if_no_cwd():
-    mk()
-    os.chdir(FSFIX)
-    os.rmdir(FSFIX)
+def test_ConfigurationError_raised_if_no_cwd(tmpdir):
+    cwd = tmpdir.ensure("doesnotexist", dir=True)
+    cwd.chdir()
+    cwd.remove(rec=1, ignore_errors=1)
+    assert not cwd.check() # make sure it doesn't exist
     c = Configurable()
-    assert_raises(ConfigurationError, c.configure, [])
+    raises(ConfigurationError, c.configure, [])
 
-def test_ConfigurationError_NOT_raised_if_no_cwd_but_do_have__www_root():
-    mk()
-    foo = os.getcwd()
-    os.chdir(FSFIX)
-    os.rmdir(os.getcwd())
+def test_ConfigurationError_NOT_raised_if_no_cwd_but_do_have__www_root(tmpdir):
+    cwd = tmpdir.ensure("doesnotexist", dir=True)
+    assert cwd.check()
+    cwd.chdir()
+    cwd.remove(rec=1, ignore_errors=1)
+    assert not cwd.check() # make sure it doesn't exist
     c = Configurable()
-    c.configure(['--www_root', foo])
-    expected = foo
+    c.configure(['--www_root', str(tmpdir)])
+    expected = str(tmpdir)
     actual = c.www_root
-    assert actual == expected, actual
+    assert actual == expected
 
-def test_configurable_sees_root_option():
-    mk()
+def test_configurable_sees_root_option(tmpdir):
     c = Configurable()
-    c.configure(['--www_root', FSFIX])
+    c.configure(['--www_root', str(tmpdir)])
     expected = os.getcwd()
     actual = c.www_root
-    assert actual == expected, actual
+    assert actual == expected
 
 def test_address_can_be_localhost():
     expected = (('127.0.0.1', 8000), 2)
     actual = parse.network_address(u'localhost:8000')
-    assert actual == expected, actual
+    assert actual == expected
 
 def test_configuration_scripts_works_at_all():
     o = OptionParser()
     opts, args = o.parse_args(['--configuration_scripts', "foo"])
     expected = "foo"
     actual = opts.configuration_scripts
-    assert actual == expected, actual
+    assert actual == expected
 
-def test_configuration_script_can_set_renderer_default():
+def test_configuration_script_can_set_renderer_default(tmpdir):
     CONFIG = """
 website.renderer_default="stdlib_format"
     """
@@ -137,17 +140,15 @@ name="program"
 [----]
 Greetings, {name}!
     """
-    mk(
-       ('.aspen/configure-aspen.py', CONFIG),
-       ('index.html.spt', SIMPLATE)
-      )
-    w = Website(['--www_root', FSFIX, '-p', fix('.aspen'), '--show_tracebacks=yes'])
+    tmpdir.ensure('.aspen/configure-aspen.py').write(CONFIG)
+    tmpdir.ensure('index.html.spt').write(SIMPLATE)
+    w = Website(['--www_root', str(tmpdir), '-p', str(tmpdir.join('.aspen')), '--show_tracebacks=yes'])
     request = StubRequest(b'/')
     request.website = w
     response = w.handle_safely(request)
     actual = response.body.strip()
     expected = 'Greetings, program!'
-    assert actual == expected, actual
+    assert actual == expected
 
 def test_configuration_script_ignores_blank_indexfilenames():
     w = Website(['--indices', 'index.html,, ,default.html'])
@@ -160,10 +161,10 @@ def test_configuration_script_ignores_blank_indexfilenames():
 
 def test_parse_charset_good():
     actual = parse.charset(u'UTF-8')
-    assert actual == 'UTF-8', actual
+    assert actual == 'UTF-8'
 
 def test_parse_charset_bad():
-    assert_raises(ValueError, parse.charset, u'')
+    raises(ValueError, parse.charset, u'')
 
 
 def test_parse_yes_no_yes_is_True():
@@ -185,91 +186,91 @@ def test_parse_yes_no_1_is_False():
     assert not parse.yes_no(u'0')
 
 def test_parse_yes_no_int_is_AttributeError():
-    assert_raises(TypeError, parse.yes_no, 1)
+    raises(TypeError, parse.yes_no, 1)
 
 def test_parse_yes_no_other_is_ValueError():
-    assert_raises(ValueError, parse.yes_no, u'cheese')
+    raises(ValueError, parse.yes_no, u'cheese')
 
 
 def test_parse_list_handles_one():
     actual = parse.list_(u'foo')
-    assert actual == (False, ['foo']), actual
+    assert actual == (False, ['foo'])
 
 def test_parse_list_handles_two():
     actual = parse.list_(u'foo,bar')
-    assert actual == (False, ['foo', 'bar']), actual
+    assert actual == (False, ['foo', 'bar'])
 
 def test_parse_list_handles_spaces():
     actual = parse.list_(u' foo ,   bar ')
-    assert actual == (False, ['foo', 'bar']), actual
+    assert actual == (False, ['foo', 'bar'])
 
 def test_parse_list_handles_some_spaces():
     actual = parse.list_(u'foo,   bar, baz , buz ')
-    assert actual == (False, ['foo', 'bar', 'baz', 'buz']), actual
+    assert actual == (False, ['foo', 'bar', 'baz', 'buz'])
 
 def test_parse_list_uniquifies():
     actual = parse.list_(u'foo,foo,bar')
-    assert actual == (False, ['foo', 'bar']), actual
+    assert actual == (False, ['foo', 'bar'])
 
 def test_parse_list_extends():
     actual = parse.list_(u'+foo')
-    assert actual == (True, ['foo']), actual
+    assert actual == (True, ['foo'])
 
 
 def test_parse_renderer_good():
     actual = parse.renderer(u'stdlib_percent')
-    assert actual == u'stdlib_percent', actual
+    assert actual == u'stdlib_percent'
 
 def test_parse_renderer_bad():
-    assert_raises(ValueError, parse.renderer, u'floober')
+    raises(ValueError, parse.renderer, u'floober')
 
 
 def test_parse_network_engine_good():
     actual = parse.network_engine(u'cheroot')
-    assert actual == 'cheroot', actual
+    assert actual == 'cheroot'
 
 def test_parse_network_engine_bad():
-    assert_raises(ValueError, parse.network_engine, u'floober')
+    raises(ValueError, parse.network_engine, u'floober')
 
 
 def test_parse_network_address_unix_socket():
     actual = parse.network_address(u"/foo/bar")
-    assert actual == ("/foo/bar", socket.AF_UNIX), actual
+    assert actual == ("/foo/bar", socket.AF_UNIX)
 
 def test_parse_network_address_unix_socket_fails_on_windows():
     oldval = aspen.WINDOWS
     try:
         aspen.WINDOWS = True
-        assert_raises(ValueError, parse.network_address, u"/foo/bar")
+        raises(ValueError, parse.network_address, u"/foo/bar")
     finally:
         aspen.WINDOWS = oldval
 
 def test_parse_network_address_notices_ipv6():
     actual = parse.network_address(u"2607:f0d0:1002:51::4")
-    assert actual == (u"2607:f0d0:1002:51::4", socket.AF_INET6), actual
+    assert actual == (u"2607:f0d0:1002:51::4", socket.AF_INET6)
 
 def test_parse_network_address_sees_one_colon_as_ipv4():
     actual = parse.network_address(u"192.168.1.1:8080")
-    assert actual == ((u"192.168.1.1", 8080), socket.AF_INET), actual
+    assert actual == ((u"192.168.1.1", 8080), socket.AF_INET)
 
 def test_parse_network_address_need_colon_for_ipv4():
-    assert_raises(ValueError, parse.network_address, u"192.168.1.1 8080")
+    raises(ValueError, parse.network_address, u"192.168.1.1 8080")
 
 def test_parse_network_address_defaults_to_inaddr_any():
     actual = parse.network_address(u':8080')
-    assert actual == ((u'0.0.0.0', 8080), socket.AF_INET), actual
+    assert actual == ((u'0.0.0.0', 8080), socket.AF_INET)
 
 def test_parse_network_address_with_bad_address():
-    assert_raises(ValueError, parse.network_address, u'0 0 0 0:8080')
+    raises(ValueError, parse.network_address, u'0 0 0 0:8080')
 
 def test_parse_network_address_with_bad_port():
-    assert_raises(ValueError, parse.network_address, u':80 0')
+    raises(ValueError, parse.network_address, u':80 0')
 
 def test_parse_network_address_with_port_too_low():
-    actual = assert_raises(ValueError, parse.network_address, u':-1').args[0]
-    assert actual == "invalid port (out of range)", actual
+    actual = raises(ValueError, parse.network_address, u':-1')
+    assert "invalid port (out of range)" in str(actual)
 
 def test_parse_network_address_with_port_too_high():
-    actual = assert_raises(ValueError, parse.network_address, u':65536').args[0]
-    assert actual == "invalid port (out of range)", actual
+    actual = raises(ValueError, parse.network_address, u':65536')
+    assert "invalid port (out of range)" in str(actual) 
 
